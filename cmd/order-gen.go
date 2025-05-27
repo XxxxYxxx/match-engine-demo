@@ -10,18 +10,20 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 // Order 订单结构体，与主程序保持一致
 type Order struct {
-	OrderID   string  `json:"order_id"`
-	UserID    int     `json:"user_id"`
-	OrderType string  `json:"order_type"`
-	Price     float64 `json:"price"`
-	Amount    float64 `json:"amount"`
-	Timestamp int64   `json:"timestamp"`
+	OrderID   string          `json:"order_id"`
+	UserID    int             `json:"user_id"`
+	OrderType string          `json:"order_type"`
+	OrderKind string          `json:"order_kind"` // LIMIT or MARKET
+	Price     decimal.Decimal `json:"price"`
+	Amount    decimal.Decimal `json:"amount"`
+	Timestamp int64           `json:"timestamp"`
 }
 
 type PostgresClient struct {
@@ -58,17 +60,30 @@ func (pc *PostgresClient) GetValidUserIDs() ([]int, error) {
 	return userIDs, nil
 }
 
-// generateRandomOrder 生成随机订单
+// generateRandomOrder 生成随机订单，支持限价和市价订单
 func generateRandomOrder(userIDs []int) Order {
 	orderTypes := []string{"BID", "ASK"}
-	return Order{
+	orderKinds := []string{"LIMIT", "MARKET"}
+
+	// 随机生成价格和数量
+	price := decimal.NewFromFloat(40000 + rand.Float64()*1000).Round(8)
+	amount := decimal.NewFromFloat(0.01 + rand.Float64()*0.99).Round(8)
+	order := Order{
 		OrderID:   uuid.New().String(),
-		UserID:    userIDs[rand.Intn(len(userIDs))],       // 随机选择 user_id
-		OrderType: orderTypes[rand.Intn(len(orderTypes))], // 随机 BID 或 ASK
-		Price:     40000 + rand.Float64()*20000,           // 40000 到 60000
-		Amount:    0.01 + rand.Float64()*0.99,             // 0.01 到 1.0
-		Timestamp: time.Now().Unix(),                      // 当前时间，RFC3339
+		UserID:    userIDs[rand.Intn(len(userIDs))],
+		OrderType: orderTypes[rand.Intn(len(orderTypes))],
+		OrderKind: orderKinds[rand.Intn(len(orderKinds))],
+		Price:     price,
+		Amount:    amount,
+		Timestamp: time.Now().UTC().Unix(), // 秒级时间戳
 	}
+
+	// 市价订单价格设为 0
+	if order.OrderKind == "MARKET" {
+		order.Price = decimal.Zero
+	}
+
+	return order
 }
 
 // sendOrder 发送订单到 HTTP 接口
@@ -115,7 +130,7 @@ func main() {
 	log.Printf("有效用户 ID: %v", userIDs)
 
 	// 每 3 秒发送一个随机订单
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for range ticker.C {

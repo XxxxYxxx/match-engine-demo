@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/shopspring/decimal"
 )
 
 func main() {
@@ -27,22 +28,43 @@ func main() {
 		log.Fatal("初始化订单簿失败:", err)
 	}
 
-	// 启动撮合引擎
+	// Redis 订阅
 	go func() {
+		log.Println("启动 incoming_orders 订阅")
 		rc.SubscribeOrders("incoming_orders", func(order Order) {
+			log.Printf("处理订单: %+v", order)
 			if err := pc.SaveOrder(order); err != nil {
 				log.Printf("保存订单到数据库失败: %v", err)
 				return
 			}
-			if err := rc.AddOrderToBook(order, "BTC_USDT"); err != nil {
-				log.Printf("添加到 Redis 失败: %v", err)
-				return
+			var err error
+			if order.OrderKind == "MARKET" {
+				err = matchOrdersMarket(rc, pc, "BTC_USDT", order)
+			} else {
+				err = matchOrdersPriceLimit(rc, pc, "BTC_USDT", order)
 			}
-			if err := matchOrders(rc, pc, "BTC_USDT", order); err != nil {
+			if err != nil {
 				log.Printf("撮合订单失败: %v", err)
 			}
 		})
 	}()
+
+	// Redis 成交订阅
+	// go func() {
+	// 	log.Println("启动 completed_trades 订阅")
+	// 	rc.client.Subscribe(rc.ctx, "completed_trades").Channel()
+	// 	pubsub := rc.client.Subscribe(rc.ctx, "completed_trades")
+	// 	for msg := range pubsub.Channel() {
+	// 		log.Printf("收到成交消息: %s", msg.Payload)
+	// 		var trade Trade
+	// 		if err := json.Unmarshal([]byte(msg.Payload), &trade); err != nil {
+	// 			log.Printf("解析成交失败: %v, 消息: %s", err, msg.Payload)
+	// 			continue
+	// 		}
+	// 		log.Printf("解析成交成功: %+v", trade)
+	// 		// 可添加处理逻辑，如通知前端、记录日志
+	// 	}
+	// }()
 
 	// 启动 HTTP 服务器
 	go func() {
@@ -75,8 +97,16 @@ func handleOrder(pc *PostgresClient, rc *RedisClient) http.HandlerFunc {
 			http.Error(w, "无效的订单类型，必须是 BID 或 ASK", http.StatusBadRequest)
 			return
 		}
-		if order.Price <= 0 || order.Amount <= 0 {
-			http.Error(w, "价格或数量必须大于 0", http.StatusBadRequest)
+		if order.OrderKind != "LIMIT" && order.OrderKind != "MARKET" {
+			http.Error(w, "无效的订单种类，必须是 LIMIT 或 MARKET", http.StatusBadRequest)
+			return
+		}
+		if order.OrderKind == "LIMIT" && order.Price.LessThanOrEqual(decimal.Zero) {
+			http.Error(w, "限价订单价格必须大于 0", http.StatusBadRequest)
+			return
+		}
+		if order.Amount.LessThanOrEqual(decimal.Zero) {
+			http.Error(w, "订单数量必须大于 0", http.StatusBadRequest)
 			return
 		}
 		if order.Timestamp == 0 {

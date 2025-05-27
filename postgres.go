@@ -23,7 +23,7 @@ func NewPostgresClient() (*PostgresClient, error) {
 	}
 
 	// 自动迁移数据库结构
-	if err := db.AutoMigrate(&OrderModel{}, &TradeModel{}); err != nil {
+	if err := db.AutoMigrate(&OrderModel{}, &TradeModel{}, &UserModel{}); err != nil {
 		return nil, fmt.Errorf("自动迁移失败: %v", err)
 	}
 
@@ -42,7 +42,8 @@ type OrderModel struct {
 	OrderID   string `gorm:"primaryKey;type:uuid"`
 	UserID    int    `gorm:"type:integer;foreignKey:UserID;references:users(user_id)"` // 改为整型并添加外键
 	Pair      string `gorm:"type:varchar(20);default:BTC_USDT"`
-	OrderType string `gorm:"type:varchar(4)"` // 去掉CHECK约束，由应用层验证
+	OrderType string `gorm:"type:varchar(4)"`               // 去掉CHECK约束，由应用层验证
+	OrderKind string `gorm:"type:varchar(6);default:LIMIT"` // 去掉CHECK约束，由应用层验证
 	Price     float64
 	Amount    float64
 	Status    string `gorm:"type:varchar(20);default:OPEN"`
@@ -59,6 +60,10 @@ type TradeModel struct {
 	Timestamp  int64 `gorm:"timestamp"`
 }
 
+type UserModel struct {
+	UserID int `gorm:"primaryKey;type:integer"`
+}
+
 // TableName 指定OrderModel的表名
 func (OrderModel) TableName() string {
 	return "orders"
@@ -69,6 +74,10 @@ func (TradeModel) TableName() string {
 	return "trades"
 }
 
+func (UserModel) TableName() string {
+	return "users"
+}
+
 // SaveOrder 保存订单到数据库
 func (pc *PostgresClient) SaveOrder(order Order) error {
 	orderModel := OrderModel{
@@ -76,8 +85,9 @@ func (pc *PostgresClient) SaveOrder(order Order) error {
 		UserID:    order.UserID,
 		Pair:      "BTC_USDT",
 		OrderType: order.OrderType,
-		Price:     order.Price,
-		Amount:    order.Amount,
+		OrderKind: order.OrderKind,
+		Price:     order.Price.InexactFloat64(),
+		Amount:    order.Amount.InexactFloat64(),
 		Status:    "OPEN",
 		Timestamp: order.Timestamp,
 	}
@@ -90,8 +100,8 @@ func (pc *PostgresClient) SaveTrade(trade Trade) error {
 		TradeID:    trade.TradeID,
 		BidOrderID: trade.BidOrderID,
 		AskOrderID: trade.AskOrderID,
-		Price:      trade.Price,
-		Amount:     trade.Amount,
+		Price:      trade.Price.InexactFloat64(),
+		Amount:     trade.Amount.InexactFloat64(),
 		Timestamp:  time.Now().Unix(),
 	}
 	return pc.db.Create(&tradeModel).Error
