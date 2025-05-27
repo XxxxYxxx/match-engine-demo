@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	_ "net/http/pprof"
+
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/shopspring/decimal"
@@ -74,6 +76,10 @@ func main() {
 		if err := http.ListenAndServe(":8080", router); err != nil {
 			log.Fatal("HTTP 服务器启动失败:", err)
 		}
+	}()
+
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 
 	select {} // 保持程序运行
