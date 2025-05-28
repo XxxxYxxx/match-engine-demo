@@ -48,6 +48,12 @@ func main() {
 			if err != nil {
 				log.Printf("撮合订单失败: %v", err)
 			}
+
+			go func() {
+				// 撮合后推送盘口
+				snapshot := getOrderBookSnapshot(rc, "BTC_USDT")
+				broadcastOrderBook(snapshot)
+			}()
 		})
 	}()
 
@@ -76,6 +82,12 @@ func main() {
 		if err := http.ListenAndServe(":8080", router); err != nil {
 			log.Fatal("HTTP 服务器启动失败:", err)
 		}
+	}()
+
+	go func() {
+		// 假设 rc 已初始化
+		http.HandleFunc("/ws/orderbook", wsOrderBookHandler(rc))
+		http.ListenAndServe(":8081", nil)
 	}()
 
 	go func() {

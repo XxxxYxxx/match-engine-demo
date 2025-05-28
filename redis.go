@@ -195,3 +195,23 @@ func (rc *RedisClient) SubscribeOrders(channel string, handler func(Order)) {
 		handler(order)
 	}
 }
+
+func (rc *RedisClient) GetAllOrders(redisKey string) ([]Order, error) {
+	results, err := rc.client.ZRangeWithScores(rc.ctx, redisKey, 0, -1).Result()
+	if err != nil {
+		log.Printf("获取所有订单失败: %v", err)
+		return nil, err
+	}
+
+	orders := make([]Order, 0, len(results))
+	for _, result := range results {
+		var order Order
+		if err := json.Unmarshal([]byte(result.Member.(string)), &order); err != nil {
+			log.Printf("解析订单失败: %v", err)
+			continue
+		}
+		orders = append(orders, order)
+	}
+
+	return orders, nil
+}

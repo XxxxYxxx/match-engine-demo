@@ -130,7 +130,7 @@ func main() {
 	log.Printf("有效用户 ID: %v", userIDs)
 
 	// 每 3 秒发送一个随机订单
-	ticker := time.NewTicker(10 * time.Millisecond)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
 	for range ticker.C {

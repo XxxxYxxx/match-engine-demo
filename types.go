@@ -45,3 +45,15 @@ type Trade struct {
 	Price      decimal.Decimal `json:"price"`
 	Amount     decimal.Decimal `json:"amount"`
 }
+
+type OrderBookLevel struct {
+	Price  decimal.Decimal `json:"price"`  // 价格
+	Amount decimal.Decimal `json:"amount"` // 数量
+}
+
+// 盘口结构体
+type OrderBookSnapshot struct {
+	Pair string           `json:"pair"`
+	Bids []OrderBookLevel `json:"bids"`
+	Asks []OrderBookLevel `json:"asks"`
+}

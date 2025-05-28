@@ -6,6 +6,7 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
+	github.com/gorilla/websocket v1.5.3
 	github.com/shopspring/decimal v1.4.0
 	gorm.io/driver/postgres v1.5.11
 	gorm.io/gorm v1.26.1
